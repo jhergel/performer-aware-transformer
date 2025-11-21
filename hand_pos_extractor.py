@@ -70,3 +70,42 @@ def draw_hand_points(frame, hands):
             cv2.circle(frame, (x,y), 6, (0,255,0), -1)
             cv2.putText(frame, f"{side}-{name}", (x+5, y-5),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1)
+
+
+import mediapipe as mp
+import cv2
+from hand_model import HandModel
+
+mp_hands = mp.solutions.hands
+
+class FullHandExtractor:
+    def __init__(self):
+        self.hands = mp_hands.Hands(
+            static_image_mode=False,
+            max_num_hands=2,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+
+    def extract(self, frame):
+        h, w, _ = frame.shape
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        result = self.hands.process(rgb)
+
+        out = {"LH": None, "RH": None}
+        if not result.multi_hand_landmarks:
+            return out
+
+        for landmarks, handedness in zip(result.multi_hand_landmarks,
+                                         result.multi_handedness):
+
+            label = handedness.classification[0].label  # "Left" or "Right"
+            # Build full keypoint dict
+            coords = {}
+            for idx, lm in enumerate(landmarks.landmark):
+                coords[idx] = (int(lm.x * w), int(lm.y * h))
+
+            model = HandModel(keypoints=coords, handedness=label)
+            out["LH" if label=="Left" else "RH"] = model
+
+        return out
